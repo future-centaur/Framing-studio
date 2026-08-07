@@ -44,6 +44,8 @@ export async function GET(
         x: mockup.placementX,
         y: mockup.placementY,
         scale: mockup.placementScale,
+        rotateY: mockup.placementRotateY,
+        rotateX: mockup.placementRotateX,
       },
       // Before/after payload (D-17)
       beforeImageUrl: mockup.configuration.fileUrl,

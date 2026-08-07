@@ -515,16 +515,52 @@ h4 { font-size: 1.125rem; }
   min-height: calc(100dvh - 80px);
 }
 
+/* Sticky preview on all displays (desktop left column, mobile top) */
+.preview-panel {
+  position: sticky;
+  top: 60px; /* or var(--space-6) but 60px accounts for header */
+  z-index: 90;
+}
+
 @media (max-width: 1024px) {
   .configurator-layout {
     grid-template-columns: 1fr;
+    gap: var(--space-4);
+    padding-bottom: 100px; /* space for mobile sticky bar */
+  }
+
+  /* Additional mobile styles for the sticky preview */
+  .preview-panel {
+    background: var(--bg-0);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid rgba(200, 169, 110, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   }
 }
 
-/* Preview panel */
-.preview-panel {
-  position: sticky;
-  top: calc(80px + var(--space-5));
+/* Mobile Sticky Bottom Action Bar */
+.mobile-action-bar {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .mobile-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(16, 15, 13, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(200, 169, 110, 0.3);
+    padding: var(--space-3) var(--space-5);
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+  }
 }
 
 /* Sidebar picker panel */
@@ -534,11 +570,35 @@ h4 { font-size: 1.125rem; }
   gap: var(--space-5);
 }
 
-/* Catalog selection grid */
+/* Catalog selection grid — grid on desktop, horizontal scroll carousel on mobile */
 .catalog-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: var(--space-3);
+}
+
+@media (max-width: 640px) {
+  .catalog-grid {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding-bottom: var(--space-2);
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  .catalog-grid::-webkit-scrollbar {
+    height: 4px;
+  }
+  .catalog-grid::-webkit-scrollbar-thumb {
+    background: var(--accent-dark);
+    border-radius: 4px;
+  }
+
+  .catalog-item {
+    flex: 0 0 130px;
+    scroll-snap-align: start;
+  }
 }
 
 .catalog-item {

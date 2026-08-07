@@ -81,12 +81,17 @@ export async function compositePreview(input: CompositeInput): Promise<Composite
     mountType = 'STANDARD',
   } = input;
 
-  // Fetch source image
+  // Fetch or decode source image
   let imageBuffer: Buffer;
   try {
-    const response = await fetch(fileUrl);
-    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-    imageBuffer = Buffer.from(await response.arrayBuffer());
+    if (fileUrl.startsWith('data:')) {
+      const base64Part = fileUrl.split(',')[1] || '';
+      imageBuffer = Buffer.from(base64Part, 'base64');
+    } else {
+      const response = await fetch(fileUrl);
+      if (!response.ok) throw new Error(`Failed to fetch image (${response.status}): ${response.statusText}`);
+      imageBuffer = Buffer.from(await response.arrayBuffer());
+    }
   } catch (err) {
     throw new Error(`Could not load photo for compositing: ${err}`);
   }
@@ -94,15 +99,29 @@ export async function compositePreview(input: CompositeInput): Promise<Composite
   // Check resolution
   const resCheck = await checkResolution(imageBuffer, glazingTier);
 
-  // Output canvas: 800×600 preview
-  const CANVAS_W = 800;
-  const CANVAS_H = 600;
+  // Measure uploaded photo's original aspect ratio
+  const metadata = await sharp(imageBuffer).metadata();
+  const origW = metadata.width ?? 800;
+  const origH = metadata.height ?? 600;
+  const photoAspect = origW / origH;
+
+  // Calculate inner photo area preserving exact original aspect ratio (zero cropping)
+  let innerW: number;
+  let innerH: number;
+  if (photoAspect >= 1) {
+    innerW = 600;
+    innerH = Math.max(150, Math.round(600 / photoAspect));
+  } else {
+    innerH = 600;
+    innerW = Math.max(150, Math.round(600 * photoAspect));
+  }
+
   const MOULDING_PX = 36; // pixels simulating frame width
   const MAT_PX = 24;      // pixels simulating mat width
   const FLOAT_GAP = mountType === 'FLOAT' ? 8 : 0; // gap for float mount
 
-  const innerW = CANVAS_W - (MOULDING_PX + MAT_PX + FLOAT_GAP) * 2;
-  const innerH = CANVAS_H - (MOULDING_PX + MAT_PX + FLOAT_GAP) * 2;
+  const CANVAS_W = innerW + (MOULDING_PX + MAT_PX + FLOAT_GAP) * 2;
+  const CANVAS_H = innerH + (MOULDING_PX + MAT_PX + FLOAT_GAP) * 2;
 
   // Parse hex colors to RGB
   const parseHex = (hex: string) => ({
@@ -114,10 +133,10 @@ export async function compositePreview(input: CompositeInput): Promise<Composite
   const mouldingRgb = parseHex(mouldingColor.startsWith('#') ? mouldingColor : '#3d2b1f');
   const matRgb = parseHex(matColor.startsWith('#') ? matColor : '#f5f0e8');
 
-  // Resize client photo to fit inner area
+  // Resize client photo to fit inner area — exact fit, no cropping
   const resizedPhoto = await sharp(imageBuffer)
-    .resize(innerW, innerH, { fit: 'cover', position: 'centre' })
-    .jpeg({ quality: 85 })
+    .resize(innerW, innerH, { fit: 'contain', background: matRgb })
+    .jpeg({ quality: 90 })
     .toBuffer();
 
   // Build composited image: canvas → moulding background → mat layer → photo
@@ -247,12 +266,19 @@ export async function compositeMockup(
   const sceneH = sceneMeta.height ?? 800;
 
   // Step 4: scale the framed piece to placementScale × scene width
-  const pieceW = Math.round(sceneW * Math.max(0.1, Math.min(1, placementScale)));
+  let pieceW = Math.round(sceneW * Math.max(0.1, Math.min(1, placementScale)));
   const pieceMeta = await sharp(pieceBuffer).metadata();
   const origW = pieceMeta.width ?? 800;
   const origH = pieceMeta.height ?? 600;
   const aspectRatio = origH / origW;
-  const pieceH = Math.round(pieceW * aspectRatio);
+  let pieceH = Math.round(pieceW * aspectRatio);
+
+  // Prevent sharp error "Image to composite must have same dimensions or smaller"
+  if (pieceW > sceneW || pieceH > sceneH) {
+    const scaleToFit = Math.min(sceneW / pieceW, sceneH / pieceH);
+    pieceW = Math.max(1, Math.round(pieceW * scaleToFit));
+    pieceH = Math.max(1, Math.round(pieceH * scaleToFit));
+  }
 
   const scaledPiece = await sharp(pieceBuffer)
     .resize(pieceW, pieceH, { fit: 'fill' })

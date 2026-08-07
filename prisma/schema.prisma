@@ -245,10 +245,12 @@ model Mockup {
   scene           Scene         @relation(fields: [sceneId], references: [id])
   sceneId         String
 
-  // Placement — D-17: move/scale within scene canvas
-  placementX     Float   @default(0.5)  // 0–1, normalised cx within scene
-  placementY     Float   @default(0.5)  // 0–1, normalised cy within scene
-  placementScale Float   @default(0.4)  // piece width as fraction of scene width
+  // Placement — D-17: move/scale/perspective within scene canvas
+  placementX       Float   @default(0.5)  // 0–1, normalised cx within scene
+  placementY       Float   @default(0.5)  // 0–1, normalised cy within scene
+  placementScale   Float   @default(0.4)  // piece width as fraction of scene width
+  placementRotateY Float   @default(0.0)  // Y-axis wall perspective tilt in degrees (-45 to +45)
+  placementRotateX Float   @default(0.0)  // X-axis wall perspective tilt in degrees (-30 to +30)
 
   mockupImageUrl  String?  // cached composite; null until first render
   createdAt       DateTime @default(now())

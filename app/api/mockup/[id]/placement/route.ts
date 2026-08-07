@@ -16,6 +16,8 @@ const PlacementPatchSchema = z.object({
     x: z.number().min(0).max(1),
     y: z.number().min(0).max(1),
     scale: z.number().min(0.05).max(1),
+    rotateY: z.number().min(-45).max(45).optional().default(0),
+    rotateX: z.number().min(-30).max(30).optional().default(0),
   }),
 });
 
@@ -48,7 +50,7 @@ export async function PATCH(
       );
     }
 
-    const { x, y, scale } = parsed.data.placement;
+    const { x, y, scale, rotateY = 0, rotateX = 0 } = parsed.data.placement;
 
     const mockup = await db.mockup.findUnique({
       where: { id },
@@ -83,6 +85,8 @@ export async function PATCH(
         placementX: x,
         placementY: y,
         placementScale: scale,
+        placementRotateY: rotateY,
+        placementRotateX: rotateX,
         mockupImageUrl: result.mockupImageUrl,
       },
     });
@@ -90,7 +94,13 @@ export async function PATCH(
     return NextResponse.json({
       mockupId: updated.id,
       mockupImageUrl: updated.mockupImageUrl,
-      placement: { x: updated.placementX, y: updated.placementY, scale: updated.placementScale },
+      placement: {
+        x: updated.placementX,
+        y: updated.placementY,
+        scale: updated.placementScale,
+        rotateY: updated.placementRotateY,
+        rotateX: updated.placementRotateX,
+      },
     });
   } catch (err) {
     console.error('[PATCH /api/mockup/:id/placement]', err);

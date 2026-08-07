@@ -18,6 +18,8 @@ const PlacementSchema = z.object({
   x: z.number().min(0).max(1).optional().default(0.5),
   y: z.number().min(0).max(1).optional().default(0.5),
   scale: z.number().min(0.05).max(1).optional().default(0.4),
+  rotateY: z.number().min(-45).max(45).optional().default(0),
+  rotateX: z.number().min(-30).max(30).optional().default(0),
 });
 
 const MockupCreateSchema = z.object({
@@ -95,6 +97,9 @@ export async function POST(req: NextRequest) {
       placementScale: ps,
     });
 
+    const prY = placement?.rotateY ?? 0;
+    const prX = placement?.rotateX ?? 0;
+
     // Persist mockup record
     const mockup = await db.mockup.create({
       data: {
@@ -103,6 +108,8 @@ export async function POST(req: NextRequest) {
         placementX: px,
         placementY: py,
         placementScale: ps,
+        placementRotateY: prY,
+        placementRotateX: prX,
         mockupImageUrl: result.mockupImageUrl,
       },
     });

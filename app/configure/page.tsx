@@ -406,7 +406,7 @@ function ConfiguratorContent() {
       <main className="container flex-grow">
         <div className="configurator-layout">
           {/* Left Visual Preview Sticky Panel */}
-          <div className="flex flex-col gap-4">
+          <div className="preview-panel flex flex-col gap-4">
             <LivePreview
               previewImageUrl={previewUrl}
               loading={previewLoading || actionLoading}
@@ -498,6 +498,34 @@ function ConfiguratorContent() {
           </div>
         </div>
       </main>
+
+      {/* Mobile Bottom Sticky Action Bar */}
+      <div className="mobile-action-bar">
+        <div>
+          <span className="text-xs text-muted" style={{ display: 'block' }}>Total Price</span>
+          <span className="price-kes" style={{ fontSize: '1.1rem', fontWeight: 600 }}>
+            KES {totalPrice.toLocaleString()}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+          {uploadedPhotoUrl && selections.mouldingId && selections.matId && selections.glazingId && (
+            <button
+              onClick={handleVisualizeInRoom}
+              className="btn btn-outline btn-sm"
+              disabled={actionLoading}
+            >
+              🖼 Visualize
+            </button>
+          )}
+          <button
+            onClick={handleAddToCart}
+            className="btn btn-primary btn-sm"
+            disabled={!uploadedPhotoUrl || actionLoading || priceLoading}
+          >
+            Checkout 🛒
+          </button>
+        </div>
+      </div>
 
       {/* Low-res warning modal (D-4) */}
       {resolutionCheck && (
