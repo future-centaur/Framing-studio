@@ -350,7 +350,45 @@ function ConfiguratorContent() {
     }
   };
 
+  // Visualize in a Room (Slice 2 entry point)
+  // Saves the configuration (same as Share) then navigates to /visualize/<id>.
+  const handleVisualizeInRoom = async () => {
+    const { mouldingId, matId, glazingId, mountId } = selections;
+    if (!uploadedPhotoUrl || !mouldingId || !matId || !glazingId) {
+      setError('Upload a photo and select frame options before visualizing.');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await fetch('/api/design-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileUrl: uploadedPhotoUrl,
+          mouldingId,
+          matId,
+          glazingId,
+          mountId,
+          sessionId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save configuration');
+
+      // Navigate to the scene visualizer with this configuration pre-loaded.
+      // /visualize/[configurationId] is the Slice 2 entry point.
+      router.push(`/visualize/${data.shareableId}`);
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Could not open scene visualizer.');
+      setActionLoading(false);
+    }
+  };
+
   if (catalogLoading) {
+
     return (
       <div className="flex flex-col min-height-screen">
         <StudioHeader />
@@ -409,14 +447,25 @@ function ConfiguratorContent() {
 
             {/* Design Link Share Option (D-5) */}
             {uploadedPhotoUrl && (
-              <button
-                onClick={handleShareDesign}
-                className="btn btn-outline w-full"
-                id="share-design-btn"
-                disabled={actionLoading}
-              >
-                🔗 Share This Design (No Account Required)
-              </button>
+              <>
+                <button
+                  onClick={handleShareDesign}
+                  className="btn btn-outline w-full"
+                  id="share-design-btn"
+                  disabled={actionLoading}
+                >
+                  🔗 Share This Design (No Account Required)
+                </button>
+                {/* Slice 2 entry point: scene visualizer */}
+                <button
+                  onClick={handleVisualizeInRoom}
+                  className="btn btn-outline w-full"
+                  id="visualize-in-room-btn"
+                  disabled={actionLoading || !selections.mouldingId || !selections.matId || !selections.glazingId}
+                >
+                  🖼 Visualize in a Room
+                </button>
+              </>
             )}
           </div>
 

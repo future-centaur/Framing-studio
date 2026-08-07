@@ -119,6 +119,7 @@ export function StudioHeader() {
         </Link>
         <nav className="site-nav" aria-label="Main navigation">
           <a href="/configure" id="nav-configure">Configure</a>
+          <a href="/configure" id="nav-visualize">Visualize in a Room</a>
           <a href="/photographer/login" id="nav-photographer">Photographer Login</a>
         </nav>
       </div>

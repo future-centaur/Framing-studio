@@ -185,3 +185,97 @@ export async function compositePreview(input: CompositeInput): Promise<Composite
     warningMessage: resCheck.warningMessage,
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLICE 2: Scene mockup compositing (A-9, D-17)
+// Calls compositePreview() internally — same engine, zero visual drift.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SceneMockupInput {
+  /** Same input used by /api/preview — reused unmodified. */
+  compositeInput: CompositeInput;
+  /** Absolute URL or data URL of the curated room/wall background. */
+  sceneImageUrl: string;
+  /** Normalised centre X of the piece within the scene (0 = left, 1 = right). */
+  placementX: number;
+  /** Normalised centre Y of the piece within the scene (0 = top, 1 = bottom). */
+  placementY: number;
+  /** Piece width as a fraction of scene canvas width (e.g. 0.4 = 40%). */
+  placementScale: number;
+}
+
+export interface SceneMockupResult {
+  /** base64 data URL of the final room mockup. */
+  mockupImageUrl: string;
+  resolutionWarning: boolean;
+  warningMessage?: string;
+}
+
+/**
+ * Composite a framed piece (from compositePreview) into a curated scene.
+ *
+ * D-2 enforced: the framed piece is produced by the SAME compositePreview()
+ * call that /api/preview uses — never a parallel implementation.
+ * D-17 enforced: placement (x/y) and scale are adjustable.
+ */
+export async function compositeMockup(
+  input: SceneMockupInput,
+): Promise<SceneMockupResult> {
+  const { compositeInput, sceneImageUrl, placementX, placementY, placementScale } = input;
+
+  // Step 1: produce the framed piece using the SAME engine as /api/preview
+  const frameResult = await compositePreview(compositeInput);
+
+  // Decode the base64 preview back to a buffer for sharp manipulation
+  const base64Data = frameResult.previewImageUrl.replace(/^data:image\/\w+;base64,/, '');
+  const pieceBuffer = Buffer.from(base64Data, 'base64');
+
+  // Step 2: fetch the scene background
+  let sceneBuffer: Buffer;
+  if (sceneImageUrl.startsWith('data:')) {
+    const b64 = sceneImageUrl.replace(/^data:image\/\w+;base64,/, '');
+    sceneBuffer = Buffer.from(b64, 'base64');
+  } else {
+    const res = await fetch(sceneImageUrl);
+    if (!res.ok) throw new Error(`Failed to fetch scene image: ${res.statusText}`);
+    sceneBuffer = Buffer.from(await res.arrayBuffer());
+  }
+
+  // Step 3: measure scene dimensions
+  const sceneMeta = await sharp(sceneBuffer).metadata();
+  const sceneW = sceneMeta.width ?? 1200;
+  const sceneH = sceneMeta.height ?? 800;
+
+  // Step 4: scale the framed piece to placementScale × scene width
+  const pieceW = Math.round(sceneW * Math.max(0.1, Math.min(1, placementScale)));
+  const pieceMeta = await sharp(pieceBuffer).metadata();
+  const origW = pieceMeta.width ?? 800;
+  const origH = pieceMeta.height ?? 600;
+  const aspectRatio = origH / origW;
+  const pieceH = Math.round(pieceW * aspectRatio);
+
+  const scaledPiece = await sharp(pieceBuffer)
+    .resize(pieceW, pieceH, { fit: 'fill' })
+    .png()
+    .toBuffer();
+
+  // Step 5: calculate top-left corner (placement is centre-anchored)
+  const cx = Math.round(sceneW * Math.max(0, Math.min(1, placementX)));
+  const cy = Math.round(sceneH * Math.max(0, Math.min(1, placementY)));
+  const left = Math.max(0, Math.min(sceneW - pieceW, cx - Math.round(pieceW / 2)));
+  const top  = Math.max(0, Math.min(sceneH - pieceH, cy - Math.round(pieceH / 2)));
+
+  // Step 6: composite piece onto scene
+  const outputBuffer = await sharp(sceneBuffer)
+    .composite([{ input: scaledPiece, top, left, blend: 'over' }])
+    .jpeg({ quality: 88 })
+    .toBuffer();
+
+  const mockupBase64 = `data:image/jpeg;base64,${outputBuffer.toString('base64')}`;
+
+  return {
+    mockupImageUrl: mockupBase64,
+    resolutionWarning: frameResult.resolutionWarning,
+    warningMessage: frameResult.warningMessage,
+  };
+}

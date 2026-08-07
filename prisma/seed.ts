@@ -162,7 +162,55 @@ async function main() {
   });
 
   console.log('✅ Seeded StudioConfig (id=1)');
+
+  // ─────────────────────────────────────────
+  // Scene library — Slice 2 (A-9, D-14)
+  // 4 curated, on-brand static room/wall backgrounds.
+  // Swappable via admin POST /api/scenes — not hardcoded in UI (A-11 pattern).
+  // Images: Unsplash free-to-use, landscape rooms with suitable wall space.
+  // ─────────────────────────────────────────
+  const scenes = [
+    {
+      id: 'scene-neutral-living',
+      name: 'Neutral Living Room',
+      description: 'A calm, light-toned sitting room with a large plaster wall — works with any frame style.',
+      imageUrl: 'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=1600&q=80&fm=jpg',
+      sortOrder: 1,
+    },
+    {
+      id: 'scene-dark-study',
+      name: 'Dark Study',
+      description: 'Moodily lit home study with dark panelling — ideal for showing premium/ebony frames.',
+      imageUrl: 'https://images.unsplash.com/photo-1593642632559-0c6d3fc62b89?w=1600&q=80&fm=jpg',
+      sortOrder: 2,
+    },
+    {
+      id: 'scene-minimal-white',
+      name: 'Minimal White Wall',
+      description: 'Clean white gallery-style wall — puts all focus on the framed piece itself.',
+      imageUrl: 'https://images.unsplash.com/photo-1499955085172-a104c9463ece?w=1600&q=80&fm=jpg',
+      sortOrder: 3,
+    },
+    {
+      id: 'scene-warm-bedroom',
+      name: 'Warm Bedroom Corner',
+      description: 'Warm-toned bedroom wall above a bed — popular placement for portrait and fine-art prints.',
+      imageUrl: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1600&q=80&fm=jpg',
+      sortOrder: 4,
+    },
+  ];
+
+  for (const scene of scenes) {
+    await prisma.scene.upsert({
+      where: { id: scene.id },
+      update: { name: scene.name, description: scene.description, imageUrl: scene.imageUrl, sortOrder: scene.sortOrder },
+      create: { ...scene, isActive: true },
+    });
+  }
+
+  console.log(`✅ Seeded ${scenes.length} curated scenes`);
   console.log('🎉 Seed complete');
+
 }
 
 main()

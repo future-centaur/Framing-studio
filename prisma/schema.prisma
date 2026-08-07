@@ -62,6 +62,7 @@ model Configuration {
   createdAt  DateTime    @default(now())
 
   orders     Order[]
+  mockups    Mockup[]   // Slice 2: back-relation
 }
 
 // ─────────────────────────────────────────
@@ -214,4 +215,42 @@ model ConversionEvent {
   type      ConversionEventType
   sessionId String
   createdAt DateTime            @default(now())
+}
+
+// ─────────────────────────────────────────
+// Scene — curated, studio-approved room/wall background
+// A-9, D-14: static curated library; swappable via admin (A-11 pattern)
+// ─────────────────────────────────────────
+model Scene {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  imageUrl    String    // absolute URL or /api/blobs/scenes/... path
+  isActive    Boolean   @default(true)
+  sortOrder   Int       @default(0)
+  createdAt   DateTime  @default(now())
+
+  mockups     Mockup[]
+}
+
+// ─────────────────────────────────────────
+// Mockup — Configuration + Scene + Placement
+// A-9, D-17: before/after, adjustable placement
+// Placement is embedded (x/y/scale as fractions of scene dimensions)
+// ─────────────────────────────────────────
+model Mockup {
+  id              String        @id @default(uuid())
+  configuration   Configuration @relation(fields: [configurationId], references: [id])
+  configurationId String
+  scene           Scene         @relation(fields: [sceneId], references: [id])
+  sceneId         String
+
+  // Placement — D-17: move/scale within scene canvas
+  placementX     Float   @default(0.5)  // 0–1, normalised cx within scene
+  placementY     Float   @default(0.5)  // 0–1, normalised cy within scene
+  placementScale Float   @default(0.4)  // piece width as fraction of scene width
+
+  mockupImageUrl  String?  // cached composite; null until first render
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
