@@ -1,3 +1,30 @@
+# Environment
 .env
-.obsidian/
+.env.local
+.env.*.local
+
+# Dependencies
 node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Prisma
+.prisma/
+prisma/migrations/dev.db
+
+# Debug & test scripts
+scripts/test-*.mjs
+
+# Editor
+.obsidian/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS
+.DS_Store
+Thumbs.db

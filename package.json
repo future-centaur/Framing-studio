@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "clean": "Remove-Item -Recurse -Force .next -ErrorAction SilentlyContinue; Write-Host 'Cache cleared'",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
     "db:seed": "prisma db seed",

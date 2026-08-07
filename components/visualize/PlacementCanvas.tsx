@@ -12,6 +12,18 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+// Debounce helper — calls fn only after `delay`ms of silence
+function useDebounceCallback<T extends unknown[]>(fn: (...args: T) => void, delay: number) {
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return useCallback(
+    (...args: T) => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      timerRef.current = setTimeout(() => fn(...args), delay);
+    },
+    [fn, delay],
+  );
+}
+
 export interface Placement {
   x: number;        // 0–1 normalised cx
   y: number;        // 0–1 normalised cy
@@ -46,6 +58,9 @@ export function PlacementCanvas({
     rotateY: placement.rotateY ?? 0,
     rotateX: placement.rotateX ?? 0,
   });
+
+  // Debounced server sync — fires 600ms after the last local change
+  const syncToServer = useDebounceCallback(onPlacementChange, 600);
 
   // Sync external placement into local state when server finishes updating
   useEffect(() => {
@@ -98,7 +113,7 @@ export function PlacementCanvas({
     onPlacementChange(localPlacement);
   };
 
-  // ── Scroll / pinch to scale ───────────────────────────────────────────────
+  // ── Scroll / pinch to scale (local only — server syncs after 600ms idle) ──
   const handleWheel = (e: React.WheelEvent) => {
     if (loading || !mockupImageUrl) return;
     e.preventDefault();
@@ -106,7 +121,7 @@ export function PlacementCanvas({
     setLocalPlacement((prev) => {
       const newScale = Math.max(0.1, Math.min(0.9, prev.scale + delta));
       const next = { ...prev, scale: newScale };
-      onPlacementChange(next);
+      syncToServer(next); // debounced — won't fire until scrolling stops
       return next;
     });
   };
@@ -205,10 +220,14 @@ export function PlacementCanvas({
               value={Math.round(localPlacement.scale * 100)}
               onChange={(e) => {
                 const newScale = parseInt(e.target.value, 10) / 100;
-                setLocalPlacement((prev) => ({ ...prev, scale: newScale }));
+                setLocalPlacement((prev) => {
+                  const next = { ...prev, scale: newScale };
+                  syncToServer(next);
+                  return next;
+                });
               }}
-              onMouseUp={() => onPlacementChange(localPlacement)}
-              onTouchEnd={() => onPlacementChange(localPlacement)}
+              onMouseUp={() => syncToServer(localPlacement)}
+              onTouchEnd={() => syncToServer(localPlacement)}
               style={{ flex: 1, accentColor: 'var(--accent)' }}
               aria-label="Frame size in scene"
             />
@@ -231,10 +250,14 @@ export function PlacementCanvas({
               value={localPlacement.rotateY ?? 0}
               onChange={(e) => {
                 const rot = parseInt(e.target.value, 10);
-                setLocalPlacement((prev) => ({ ...prev, rotateY: rot }));
+                setLocalPlacement((prev) => {
+                  const next = { ...prev, rotateY: rot };
+                  syncToServer(next);
+                  return next;
+                });
               }}
-              onMouseUp={() => onPlacementChange(localPlacement)}
-              onTouchEnd={() => onPlacementChange(localPlacement)}
+              onMouseUp={() => syncToServer(localPlacement)}
+              onTouchEnd={() => syncToServer(localPlacement)}
               style={{ flex: 1, accentColor: 'var(--accent)' }}
               aria-label="Wall perspective rotation angle"
             />
