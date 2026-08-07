@@ -1,11 +1,8 @@
 {
-  "/api/events/route": "app/api/events/route.js",
-  "/api/upload/route": "app/api/upload/route.js",
-  "/api/price/route": "app/api/price/route.js",
-  "/api/preview/route": "app/api/preview/route.js",
-  "/photographer/dashboard/page": "app/photographer/dashboard/page.js",
-  "/photographer/resale/page": "app/photographer/resale/page.js",
-  "/configure/page": "app/configure/page.js",
-  "/page": "app/page.js",
+  "/api/studio-config/route": "app/api/studio-config/route.js",
+  "/api/scenes/route": "app/api/scenes/route.js",
+  "/api/design-link/[id]/route": "app/api/design-link/[id]/route.js",
+  "/api/mockup/route": "app/api/mockup/route.js",
+  "/api/mockup/[id]/placement/route": "app/api/mockup/[id]/placement/route.js",
   "/visualize/[configurationId]/page": "app/visualize/[configurationId]/page.js"
 }
