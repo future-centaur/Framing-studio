@@ -1,6 +1,6 @@
 [build]
   command = "npx prisma generate && next build"
-  # Publish directory intentionally left empty.
+  publish = ".next"
   # Netlify's Next.js (OpenNext) adapter handles the output.
 
 [build.environment]
