@@ -1,6 +1,5 @@
 {
-  "/api/scenes/route": "app/api/scenes/route.js",
-  "/api/studio-config/route": "app/api/studio-config/route.js",
-  "/api/design-link/[id]/route": "app/api/design-link/[id]/route.js",
+  "/api/mockup/[id]/placement/route": "app/api/mockup/[id]/placement/route.js",
+  "/api/mockup/route": "app/api/mockup/route.js",
   "/visualize/[configurationId]/page": "app/visualize/[configurationId]/page.js"
 }

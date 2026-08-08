@@ -4,19 +4,17 @@
  * app/visualize/[configurationId]/page.tsx
  *
  * Scene/Room Visualization page (Slice 2).
- * Session flow — identical for clients and photographers (PRD §5):
- *   1. Load scene library
- *   2. User picks a scene → POST /api/mockup creates mockup + returns image
- *   3. PlacementCanvas: drag/scroll adjusts placement → PATCH …/placement re-composites
- *   4. BeforeAfterToggle: compare raw photo vs. framed-in-scene
- *   5. StartOrderButton: POST …/start-order → navigate to /configure?design=<id>
- *
- * A-8: uses rabbet motif (rabbet, rabbet-accent) — same visual language as rest of site.
- * D-5 extension: mockup shareable via URL (no auth required to view).
- * A-9: accessible to both clients and photographers — no separate UI paths.
+ * Session flow:
+ *   1. Load configuration (for raw photo URL — "before" view)
+ *   2. Load frame preview image from /api/preview (the framed artwork, no scene)
+ *   3. User picks a scene → POST /api/mockup creates a record (no heavy composite needed)
+ *   4. PlacementCanvas: two CSS layers (scene bg + frame overlay) — 60fps local drag, no reload
+ *   5. PATCH …/placement saves coordinates only (no re-composite, ~50ms)
+ *   6. BeforeAfterToggle: compare raw photo vs. framed piece
+ *   7. StartOrderButton: navigate to /configure?design=<id>
  */
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { StudioHeader } from '@/components/branding/StudioBranding';
 import { ScenePicker, Scene } from '@/components/visualize/ScenePicker';
@@ -24,7 +22,7 @@ import { PlacementCanvas, Placement } from '@/components/visualize/PlacementCanv
 import { BeforeAfterToggle } from '@/components/visualize/BeforeAfterToggle';
 import { StartOrderButton } from '@/components/visualize/StartOrderButton';
 
-const DEFAULT_PLACEMENT: Placement = { x: 0.5, y: 0.4, scale: 0.4 };
+const DEFAULT_PLACEMENT: Placement = { x: 0.5, y: 0.35, scale: 0.4 };
 
 function VisualizeContent() {
   const params = useParams();
@@ -34,39 +32,62 @@ function VisualizeContent() {
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [placement, setPlacement] = useState<Placement>(DEFAULT_PLACEMENT);
   const [mockupId, setMockupId] = useState<string | null>(null);
-  const [mockupImageUrl, setMockupImageUrl] = useState<string | null>(null);
+
+  // Separate URLs: scene background + standalone frame preview (no scene composite)
+  const [sceneImageUrl, setSceneImageUrl] = useState<string | null>(null);
+  const [frameImageUrl, setFrameImageUrl] = useState<string | null>(null);
   const [beforeImageUrl, setBeforeImageUrl] = useState<string | null>(null);
-  const [compositing, setCompositing] = useState(false);
+
+  const [loadingScene, setLoadingScene] = useState(false); // initial scene selection
+  const [savingPlacement, setSavingPlacement] = useState(false); // debounced PATCH
   const [error, setError] = useState<string | null>(null);
 
-  // Debounce timer for placement updates
-  const placementDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // ── Load raw photo URL for the "before" view ───────────────────────────────
+  // ── Load configuration + frame preview on mount ────────────────────────────
   useEffect(() => {
     if (!configurationId) return;
-    // Load the configuration to get the raw fileUrl for the "before" image.
-    // We use the design-link GET endpoint which returns a Configuration.
     fetch(`/api/design-link/${configurationId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Configuration not found');
         return res.json();
       })
-      .then((data) => {
-        setBeforeImageUrl(data.fileUrl ?? null);
+      .then(async (config) => {
+        setBeforeImageUrl(config.fileUrl ?? null);
+
+        // Load the frame-only preview (same composite engine, no scene background)
+        const previewRes = await fetch('/api/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileUrl: config.fileUrl,
+            mouldingId: config.mouldingId,
+            matId: config.matId,
+            glazingId: config.glazingId,
+            mountId: config.mountId,
+          }),
+        });
+        if (previewRes.ok) {
+          const previewData = await previewRes.json();
+          setFrameImageUrl(previewData.previewImageUrl ?? null);
+        }
       })
       .catch((err) => {
-        console.error('[visualize] load configuration', err);
+        console.error('[visualize] load config', err);
         setError('Could not load your configuration. Make sure you started from the configurator.');
       });
   }, [configurationId]);
 
-  // ── Create or update mockup when scene / placement changes ─────────────────
-  const createMockup = useCallback(
-    async (scene: Scene, pl: Placement) => {
-      setCompositing(true);
+  // ── Scene selection — create mockup record (no heavy composite) ────────────
+  const handleSceneSelect = useCallback(
+    async (scene: Scene) => {
+      setSelectedScene(scene);
+      setSceneImageUrl(scene.imageUrl);
+      const pl = DEFAULT_PLACEMENT;
+      setPlacement(pl);
+      setLoadingScene(true);
       setError(null);
+
       try {
+        // POST creates the DB record; server-side composite is skipped (frame shown via CSS layer)
         const res = await fetch('/api/mockup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -79,67 +100,38 @@ function VisualizeContent() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Mockup creation failed');
         setMockupId(data.mockupId);
-        setMockupImageUrl(data.mockupImageUrl);
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Mockup failed';
+        const message = err instanceof Error ? err.message : 'Scene load failed';
         console.error('[visualize] create mockup', err);
         setError(message);
       } finally {
-        setCompositing(false);
+        setLoadingScene(false);
       }
     },
     [configurationId],
   );
 
-  const updatePlacement = useCallback(
-    async (id: string, pl: Placement) => {
-      setCompositing(true);
-      setError(null);
+  // ── Placement change — PATCH coordinates only (~50ms, no re-composite) ─────
+  const handlePlacementChange = useCallback(
+    async (pl: Placement) => {
+      setPlacement(pl);
+      if (!mockupId) return;
+      setSavingPlacement(true);
       try {
-        const res = await fetch(`/api/mockup/${id}/placement`, {
+        await fetch(`/api/mockup/${mockupId}/placement`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ placement: { x: pl.x, y: pl.y, scale: pl.scale } }),
+          body: JSON.stringify({
+            placement: { x: pl.x, y: pl.y, scale: pl.scale, rotateY: pl.rotateY ?? 0, rotateX: pl.rotateX ?? 0 },
+          }),
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? 'Placement update failed');
-        setMockupImageUrl(data.mockupImageUrl);
-        setPlacement({ x: data.placement.x, y: data.placement.y, scale: data.placement.scale });
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Update failed';
-        console.error('[visualize] update placement', err);
-        setError(message);
+      } catch (err) {
+        console.error('[visualize] save placement', err);
       } finally {
-        setCompositing(false);
+        setSavingPlacement(false);
       }
     },
-    [],
-  );
-
-  // ── Scene selection ────────────────────────────────────────────────────────
-  const handleSceneSelect = useCallback(
-    (scene: Scene) => {
-      setSelectedScene(scene);
-      // Reset to default placement for the new scene
-      const pl = DEFAULT_PLACEMENT;
-      setPlacement(pl);
-      createMockup(scene, pl);
-    },
-    [createMockup],
-  );
-
-  // ── Placement change (debounced) ───────────────────────────────────────────
-  const handlePlacementChange = useCallback(
-    (pl: Placement) => {
-      setPlacement(pl);
-      if (!mockupId || !selectedScene) return;
-
-      if (placementDebounceRef.current) clearTimeout(placementDebounceRef.current);
-      placementDebounceRef.current = setTimeout(() => {
-        updatePlacement(mockupId, pl);
-      }, 400); // 400ms debounce — avoids spamming the server while dragging
-    },
-    [mockupId, selectedScene, updatePlacement],
+    [mockupId],
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -173,20 +165,39 @@ function VisualizeContent() {
         <div className="visualize-layout">
           {/* ── Left column: canvas + before/after + CTA ── */}
           <div className="flex flex-col gap-5">
-            {/* Mockup canvas */}
-            <PlacementCanvas
-              mockupImageUrl={mockupImageUrl}
-              placement={placement}
-              onPlacementChange={handlePlacementChange}
-              loading={compositing}
-            />
+            {/* Loading overlay for initial scene fetch */}
+            {loadingScene ? (
+              <div
+                className="rabbet-accent"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 340,
+                  borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-1)',
+                  gap: 12,
+                }}
+              >
+                <div className="spinner" style={{ width: 28, height: 28 }} />
+                <span className="text-secondary text-sm">Preparing scene…</span>
+              </div>
+            ) : (
+              <PlacementCanvas
+                sceneImageUrl={sceneImageUrl}
+                frameImageUrl={frameImageUrl}
+                placement={placement}
+                onPlacementChange={handlePlacementChange}
+                saving={savingPlacement}
+              />
+            )}
 
             {/* Before/after toggle */}
-            {beforeImageUrl && (
+            {beforeImageUrl && frameImageUrl && (
               <div className="card rabbet">
                 <BeforeAfterToggle
                   beforeImageUrl={beforeImageUrl}
-                  afterImageUrl={mockupImageUrl}
+                  afterImageUrl={frameImageUrl}
                   sceneName={selectedScene?.name}
                 />
               </div>
@@ -196,7 +207,7 @@ function VisualizeContent() {
             <div className="card rabbet">
               <StartOrderButton
                 mockupId={mockupId}
-                disabled={!mockupImageUrl || compositing}
+                disabled={!mockupId || loadingScene}
               />
             </div>
           </div>
@@ -210,7 +221,7 @@ function VisualizeContent() {
               />
             </div>
 
-            {/* Frame summary card (context for the viewer) */}
+            {/* Config context card */}
             {configurationId && (
               <div className="card card-glass rabbet">
                 <p className="form-label" style={{ marginBottom: 'var(--space-3)' }}>
@@ -231,8 +242,8 @@ function VisualizeContent() {
                   style={{ margin: 'var(--space-4) 0 var(--space-3)' }}
                 />
                 <p className="text-xs text-muted">
-                  The mockup shown here uses the exact same compositing engine as the live preview
-                  in the configurator — what you see is what gets ordered.
+                  Drag to reposition · Scroll to resize · Use sliders for wall angle.
+                  Position is saved automatically.
                 </p>
               </div>
             )}

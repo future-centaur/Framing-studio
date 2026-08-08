@@ -1,57 +1,67 @@
 'use client';
 
 /**
- * PlacementCanvas — interactive 60fps mockup canvas.
+ * PlacementCanvas — two-layer client-side canvas.
  *
- * Displays the room scene with interactive client-side 60fps drag, scale, and 3D wall perspective adjustment.
+ * Architecture (zero-reload repositioning):
+ * - Layer 1: scene background image rendered as a full-width <img>
+ * - Layer 2: framed artwork <img> positioned absolutely on top using CSS transform
+ * - Drag/scroll/slider adjusts a localPlacement state → instant CSS repositioning at 60fps
+ * - onPlacementChange is debounced 800ms and ONLY saves coordinates to the DB
+ *   (no re-composite on drag — the server never re-renders the image on placement change)
  *
- * Performance optimization:
- * - Dragging/scaling/tilting operates 100% locally on the client with zero lag.
- * - On drag release (pointer-up) or slider release, onPlacementChange is triggered to sync with the server.
+ * The two images are kept separate so the scene never has to reload.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-// Debounce helper — calls fn only after `delay`ms of silence
+// Inline debounce — fires fn only after `delay`ms of silence
 function useDebounceCallback<T extends unknown[]>(fn: (...args: T) => void, delay: number) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fnRef = useRef(fn);
+  fnRef.current = fn;
   return useCallback(
     (...args: T) => {
       if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => fn(...args), delay);
+      timerRef.current = setTimeout(() => fnRef.current(...args), delay);
     },
-    [fn, delay],
+    [delay],
   );
 }
 
 export interface Placement {
-  x: number;        // 0–1 normalised cx
-  y: number;        // 0–1 normalised cy
-  scale: number;    // 0–1 fraction of scene width
-  rotateY?: number; // -45 to +45 deg (wall perspective tilt)
-  rotateX?: number; // -30 to +30 deg (vertical tilt)
+  x: number;        // 0–1 normalised cx within scene
+  y: number;        // 0–1 normalised cy within scene
+  scale: number;    // piece width as fraction of scene width (0.1–0.9)
+  rotateY?: number; // CSS perspective tilt in deg (-30 to +30)
+  rotateX?: number; // CSS perspective tilt in deg (-20 to +20)
 }
 
 interface PlacementCanvasProps {
-  /** The composited mockup image URL from the server. */
-  mockupImageUrl: string | null;
-  /** Current placement values. */
+  /** URL of the curated room/scene background. */
+  sceneImageUrl: string | null;
+  /** URL of the framed artwork composite (from /api/preview or POST /api/mockup). */
+  frameImageUrl: string | null;
+  /** Current saved placement (from server state). */
   placement: Placement;
-  /** Called when drag/scale/tilt completes. */
+  /** Called when the user settles on a new placement (debounced). Just saves coords — no re-composite. */
   onPlacementChange: (placement: Placement) => void;
-  loading?: boolean;
+  /** Show a subtle "saving" indicator while the debounced PATCH is in-flight. */
+  saving?: boolean;
 }
 
 export function PlacementCanvas({
-  mockupImageUrl,
+  sceneImageUrl,
+  frameImageUrl,
   placement,
   onPlacementChange,
-  loading = false,
+  saving = false,
 }: PlacementCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ mouseX: number; mouseY: number; px: number; py: number } | null>(null);
-  const [localPlacement, setLocalPlacement] = useState<Placement>({
+
+  const [local, setLocal] = useState<Placement>({
     x: placement.x ?? 0.5,
     y: placement.y ?? 0.4,
     scale: placement.scale ?? 0.4,
@@ -59,13 +69,10 @@ export function PlacementCanvas({
     rotateX: placement.rotateX ?? 0,
   });
 
-  // Debounced server sync — fires 600ms after the last local change
-  const syncToServer = useDebounceCallback(onPlacementChange, 600);
-
-  // Sync external placement into local state when server finishes updating
+  // Sync external placement into local state only when not dragging
   useEffect(() => {
     if (!isDragging) {
-      setLocalPlacement({
+      setLocal({
         x: placement.x ?? 0.5,
         y: placement.y ?? 0.4,
         scale: placement.scale ?? 0.4,
@@ -75,232 +82,239 @@ export function PlacementCanvas({
     }
   }, [placement, isDragging]);
 
-  // Helper: convert pixel delta to normalised delta
-  const pixelToNorm = useCallback((dx: number, dy: number) => {
-    const el = containerRef.current;
-    if (!el) return { nx: 0, ny: 0 };
-    const { width, height } = el.getBoundingClientRect();
-    return { nx: dx / width, ny: dy / height };
-  }, []);
+  // Debounced save — fires 800ms after user stops interacting
+  const debouncedSave = useDebounceCallback(onPlacementChange, 800);
 
-  // ── Drag to reposition ────────────────────────────────────────────────────
+  // ── Drag to reposition ─────────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
-    if (loading || !mockupImageUrl) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
+    if (!frameImageUrl) return;
+    e.stopPropagation();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     setIsDragging(true);
     dragStartRef.current = {
       mouseX: e.clientX,
       mouseY: e.clientY,
-      px: localPlacement.x,
-      py: localPlacement.y,
+      px: local.x,
+      py: local.y,
     };
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDragging || !dragStartRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const { width, height } = container.getBoundingClientRect();
     const dx = e.clientX - dragStartRef.current.mouseX;
     const dy = e.clientY - dragStartRef.current.mouseY;
-    const { nx, ny } = pixelToNorm(dx, dy);
-    const newX = Math.max(0.05, Math.min(0.95, dragStartRef.current.px + nx));
-    const newY = Math.max(0.05, Math.min(0.95, dragStartRef.current.py + ny));
-    setLocalPlacement((prev) => ({ ...prev, x: newX, y: newY }));
+    const newX = Math.max(0.05, Math.min(0.95, dragStartRef.current.px + dx / width));
+    const newY = Math.max(0.05, Math.min(0.95, dragStartRef.current.py + dy / height));
+    setLocal((prev) => ({ ...prev, x: newX, y: newY }));
   };
 
   const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
     dragStartRef.current = null;
-    onPlacementChange(localPlacement);
+    debouncedSave(local);
   };
 
-  // ── Scroll / pinch to scale (local only — server syncs after 600ms idle) ──
+  // ── Scroll to scale ────────────────────────────────────────────────────────
   const handleWheel = (e: React.WheelEvent) => {
-    if (loading || !mockupImageUrl) return;
+    if (!frameImageUrl) return;
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.02 : 0.02;
-    setLocalPlacement((prev) => {
-      const newScale = Math.max(0.1, Math.min(0.9, prev.scale + delta));
-      const next = { ...prev, scale: newScale };
-      syncToServer(next); // debounced — won't fire until scrolling stops
+    const delta = e.deltaY > 0 ? -0.025 : 0.025;
+    setLocal((prev) => {
+      const next = { ...prev, scale: Math.max(0.1, Math.min(0.9, prev.scale + delta)) };
+      debouncedSave(next);
       return next;
     });
   };
 
-  // 3D Perspective Transform for Wall Orientation Alignment
-  const rotY = localPlacement.rotateY ?? 0;
-  const rotX = localPlacement.rotateX ?? 0;
-  const perspectiveTransform = `perspective(1000px) rotateY(${rotY}deg) rotateX(${rotX}deg)`;
+  // ── Compute CSS position of the frame overlay ──────────────────────────────
+  // We position the frame as: left = cx - pieceWidth/2, top = cy - pieceHeight/2
+  // Using percentage values relative to the container so it's responsive.
+  const pieceWidthPct = local.scale * 100;          // % of container width
+  const leftPct = local.x * 100 - pieceWidthPct / 2;
+  const topPct = local.y * 100;
+
+  const rotY = local.rotateY ?? 0;
+  const rotX = local.rotateX ?? 0;
+  const transform = `perspective(900px) rotateY(${rotY}deg) rotateX(${rotX}deg)`;
 
   return (
-    <div className="mockup-canvas-wrapper rabbet-accent" ref={containerRef}>
-      {/* Mockup Canvas */}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      {/* ── Two-layer canvas ── */}
       <div
-        className="mockup-canvas-inner"
+        ref={containerRef}
+        className="rabbet-accent"
         style={{
           position: 'relative',
+          width: '100%',
+          borderRadius: 'var(--radius-md)',
+          overflow: 'hidden',
+          background: 'var(--bg-2)',
+          cursor: isDragging ? 'grabbing' : frameImageUrl ? 'grab' : 'default',
           userSelect: 'none',
           touchAction: 'none',
-          perspective: 1000,
+          minHeight: 200,
         }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
         onWheel={handleWheel}
       >
-        {mockupImageUrl ? (
-          <div style={{ position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 'var(--radius-md)' }}>
-            {/* Rendered mockup */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={mockupImageUrl}
-              alt="Room mockup — drag to reposition, scroll to scale"
-              style={{
-                width: '100%',
-                display: 'block',
-                cursor: isDragging ? 'grabbing' : 'grab',
-                opacity: loading ? 0.7 : 1,
-                transform: perspectiveTransform,
-                transition: isDragging ? 'none' : 'transform var(--dur-mid), opacity var(--dur-mid)',
-                transformOrigin: 'center center',
-              }}
-              draggable={false}
-            />
-          </div>
+        {/* Layer 1: scene background */}
+        {sceneImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={sceneImageUrl}
+            alt="Room scene"
+            draggable={false}
+            style={{ width: '100%', display: 'block', pointerEvents: 'none' }}
+          />
         ) : (
-          <div className="mockup-canvas-placeholder">
-            <span style={{ fontSize: '2rem', opacity: 0.4 }}>🖼</span>
-            <p className="text-secondary text-sm">Select a scene to see your piece in a room</p>
+          <div
+            style={{
+              width: '100%',
+              paddingTop: '62.5%', // 16:10 placeholder aspect ratio
+              background: 'var(--bg-2)',
+            }}
+          />
+        )}
+
+        {/* Layer 2: framed artwork — absolutely positioned, drag target */}
+        {frameImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={frameImageUrl}
+            alt="Your framed piece — drag to reposition"
+            draggable={false}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            style={{
+              position: 'absolute',
+              top: `${topPct}%`,
+              left: `${leftPct}%`,
+              width: `${pieceWidthPct}%`,
+              transform,
+              transformOrigin: 'center top',
+              transition: isDragging ? 'none' : 'top 0.12s ease, left 0.12s ease',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              // Box shadow to give depth
+              filter: 'drop-shadow(0 8px 24px rgba(0,0,0,0.5))',
+            }}
+          />
+        )}
+
+        {/* Saving indicator (top-right corner) */}
+        {saving && (
+          <div
+            style={{
+              position: 'absolute',
+              top: 10,
+              right: 10,
+              background: 'rgba(16,15,13,0.75)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '4px 10px',
+              fontSize: '0.7rem',
+              color: 'var(--accent-light)',
+              backdropFilter: 'blur(6px)',
+            }}
+          >
+            Saving…
           </div>
         )}
 
-        {/* Loading overlay */}
-        {loading && (
+        {/* Empty state */}
+        {!sceneImageUrl && !frameImageUrl && (
           <div
             style={{
               position: 'absolute',
               inset: 0,
               display: 'flex',
+              flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              background: 'rgba(16,15,13,0.4)',
-              borderRadius: 'var(--radius-md)',
-              backdropFilter: 'blur(2px)',
+              gap: 8,
             }}
           >
-            <div className="spinner" style={{ width: 28, height: 28 }} />
+            <span style={{ fontSize: '2.5rem', opacity: 0.3 }}>🖼</span>
+            <p className="text-secondary text-sm">Select a scene to begin</p>
           </div>
         )}
       </div>
 
-      {/* Placement hint */}
-      {mockupImageUrl && (
-        <p
-          className="text-xs text-muted"
-          style={{ marginTop: 'var(--space-2)', textAlign: 'center' }}
-        >
-          Drag to reposition · Scroll to resize · Adjust wall perspective below
+      {/* Hint */}
+      {frameImageUrl && (
+        <p className="text-xs text-muted" style={{ textAlign: 'center' }}>
+          Drag to reposition · Scroll to resize · Use sliders below for wall angle
         </p>
       )}
 
-      {/* Interactive Controls Panel */}
-      {mockupImageUrl && (
-        <div style={{ marginTop: 'var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {/* Size Slider */}
+      {/* ── Controls ── */}
+      {frameImageUrl && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+          {/* Size slider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span className="text-xs text-muted" style={{ flexShrink: 0, width: 90 }}>
-              Frame Size
-            </span>
+            <span className="text-xs text-muted" style={{ flexShrink: 0, width: 90 }}>Frame Size</span>
             <input
               id="placement-scale-slider"
-              type="range"
-              min={10}
-              max={80}
-              step={1}
-              value={Math.round(localPlacement.scale * 100)}
+              type="range" min={10} max={80} step={1}
+              value={Math.round(local.scale * 100)}
               onChange={(e) => {
                 const newScale = parseInt(e.target.value, 10) / 100;
-                setLocalPlacement((prev) => {
+                setLocal((prev) => {
                   const next = { ...prev, scale: newScale };
-                  syncToServer(next);
+                  debouncedSave(next);
                   return next;
                 });
               }}
-              onMouseUp={() => syncToServer(localPlacement)}
-              onTouchEnd={() => syncToServer(localPlacement)}
               style={{ flex: 1, accentColor: 'var(--accent)' }}
               aria-label="Frame size in scene"
             />
             <span className="text-xs text-muted" style={{ flexShrink: 0, minWidth: 36, textAlign: 'right' }}>
-              {Math.round(localPlacement.scale * 100)}%
+              {Math.round(local.scale * 100)}%
             </span>
           </div>
 
-          {/* Wall Perspective / Angle Tilt */}
+          {/* Wall perspective slider */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-            <span className="text-xs text-muted" style={{ flexShrink: 0, width: 90 }}>
-              Wall Perspective
-            </span>
+            <span className="text-xs text-muted" style={{ flexShrink: 0, width: 90 }}>Wall Angle</span>
             <input
               id="placement-rotate-y-slider"
-              type="range"
-              min={-30}
-              max={30}
-              step={1}
-              value={localPlacement.rotateY ?? 0}
+              type="range" min={-30} max={30} step={1}
+              value={local.rotateY ?? 0}
               onChange={(e) => {
                 const rot = parseInt(e.target.value, 10);
-                setLocalPlacement((prev) => {
+                setLocal((prev) => {
                   const next = { ...prev, rotateY: rot };
-                  syncToServer(next);
+                  debouncedSave(next);
                   return next;
                 });
               }}
-              onMouseUp={() => syncToServer(localPlacement)}
-              onTouchEnd={() => syncToServer(localPlacement)}
               style={{ flex: 1, accentColor: 'var(--accent)' }}
-              aria-label="Wall perspective rotation angle"
+              aria-label="Wall perspective angle"
             />
             <span className="text-xs text-muted" style={{ flexShrink: 0, minWidth: 36, textAlign: 'right' }}>
-              {(localPlacement.rotateY ?? 0) > 0 ? `+${localPlacement.rotateY}°` : `${localPlacement.rotateY ?? 0}°`}
+              {(local.rotateY ?? 0) > 0 ? `+${local.rotateY}°` : `${local.rotateY ?? 0}°`}
             </span>
           </div>
 
-          {/* Quick Wall Angle Presets */}
-          <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end', marginTop: 'var(--space-1)' }}>
-            <button
-              type="button"
-              className={`btn btn-sm ${rotY === -15 ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => {
-                const next = { ...localPlacement, rotateY: -15 };
-                setLocalPlacement(next);
-                onPlacementChange(next);
-              }}
-            >
-              Left Wall
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${rotY === 0 ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => {
-                const next = { ...localPlacement, rotateY: 0, rotateX: 0 };
-                setLocalPlacement(next);
-                onPlacementChange(next);
-              }}
-            >
-              Flat Wall
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${rotY === 15 ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => {
-                const next = { ...localPlacement, rotateY: 15 };
-                setLocalPlacement(next);
-                onPlacementChange(next);
-              }}
-            >
-              Right Wall
-            </button>
+          {/* Preset buttons */}
+          <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'flex-end' }}>
+            {([[-15, 'Left Wall'], [0, 'Flat Wall'], [15, 'Right Wall']] as const).map(([deg, label]) => (
+              <button
+                key={label}
+                type="button"
+                className={`btn btn-sm ${(local.rotateY ?? 0) === deg ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => {
+                  const next = { ...local, rotateY: deg, rotateX: 0 };
+                  setLocal(next);
+                  debouncedSave(next);
+                }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       )}

@@ -1,15 +1,17 @@
 /**
  * PATCH /api/mockup/[id]/placement
- * Input: { placement: { x, y, scale } }
- * Output: { mockupImageUrl }
+ * Input:  { placement: { x, y, scale, rotateY?, rotateX? } }
+ * Output: { mockupId, placement }
  *
- * D-17: Adjustable placement (move/scale) triggers re-composite using same engine.
+ * D-17: Saves updated placement coordinates.
+ * NOTE: This route intentionally does NOT re-composite the image.
+ * Repositioning is handled client-side (CSS layer approach in PlacementCanvas).
+ * Re-compositing only happens at POST /api/mockup time (scene selection).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { compositeMockup } from '@/lib/compositing';
 
 const PlacementPatchSchema = z.object({
   placement: z.object({
@@ -20,19 +22,6 @@ const PlacementPatchSchema = z.object({
     rotateX: z.number().min(-30).max(30).optional().default(0),
   }),
 });
-
-// Visual colour maps — kept in sync with /api/preview and /api/mockup (D-2)
-const MOULDING_COLORS: Record<string, string> = {
-  'Classic Walnut': '#4a2c17',
-  'Oak Natural': '#c8a05a',
-  'Brushed Aluminium': '#a0a5a8',
-  'Museum Ebony': '#1a1a1a',
-};
-const MAT_COLORS: Record<string, string> = {
-  'White Standard Mat': '#f8f4ee',
-  'Ivory Alpha-Cellulose Mat': '#f2ead8',
-  'Cotton Rag Archival Mat': '#eee7d5',
-};
 
 export async function PATCH(
   req: NextRequest,
@@ -52,33 +41,6 @@ export async function PATCH(
 
     const { x, y, scale, rotateY = 0, rotateX = 0 } = parsed.data.placement;
 
-    const mockup = await db.mockup.findUnique({
-      where: { id },
-      include: {
-        configuration: { include: { moulding: true, mat: true, glazing: true, mount: true } },
-        scene: true,
-      },
-    });
-
-    if (!mockup) {
-      return NextResponse.json({ error: 'Mockup not found' }, { status: 404 });
-    }
-
-    // Re-composite with updated placement (same engine — D-2)
-    const result = await compositeMockup({
-      compositeInput: {
-        fileUrl: mockup.configuration.fileUrl,
-        mouldingColor: MOULDING_COLORS[mockup.configuration.moulding.name] ?? '#3d2b1f',
-        matColor: MAT_COLORS[mockup.configuration.mat.name] ?? '#f5f0e8',
-        glazingTier: mockup.configuration.glazing.tier,
-        mountType: mockup.configuration.mount?.name?.includes('Float') ? 'FLOAT' : 'STANDARD',
-      },
-      sceneImageUrl: mockup.scene.imageUrl,
-      placementX: x,
-      placementY: y,
-      placementScale: scale,
-    });
-
     const updated = await db.mockup.update({
       where: { id },
       data: {
@@ -87,13 +49,12 @@ export async function PATCH(
         placementScale: scale,
         placementRotateY: rotateY,
         placementRotateX: rotateX,
-        mockupImageUrl: result.mockupImageUrl,
+        // mockupImageUrl intentionally not updated — client renders position via CSS
       },
     });
 
     return NextResponse.json({
       mockupId: updated.id,
-      mockupImageUrl: updated.mockupImageUrl,
       placement: {
         x: updated.placementX,
         y: updated.placementY,
