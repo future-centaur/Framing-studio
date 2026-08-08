@@ -1,0 +1,7 @@
+[build]
+  command = "npx prisma generate && next build"
+  # Publish directory intentionally left empty.
+  # Netlify's Next.js (OpenNext) adapter handles the output.
+
+[build.environment]
+  NODE_VERSION = "20"
