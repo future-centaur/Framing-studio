@@ -1,5 +1,0 @@
-{
-  "/api/mockup/[id]/placement/route": "app/api/mockup/[id]/placement/route.js",
-  "/api/mockup/route": "app/api/mockup/route.js",
-  "/visualize/[configurationId]/page": "app/visualize/[configurationId]/page.js"
-}
