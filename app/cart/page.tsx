@@ -211,7 +211,7 @@ export default function CartPage() {
               </div>
 
               {/* Checkout actions */}
-              <div className="flex gap-4 mt-2">
+              <div className="flex flex-wrap gap-3 mt-2 justify-between items-center">
                 <button
                   onClick={handleClearCart}
                   className="btn btn-outline btn-sm"
@@ -219,17 +219,18 @@ export default function CartPage() {
                 >
                   Clear Cart
                 </button>
-                <div className="flex-grow" />
-                <Link href="/configure" className="btn btn-outline">
-                  + Add Design
-                </Link>
-                <button
-                  onClick={() => router.push('/checkout')}
-                  className="btn btn-primary"
-                  id="checkout-cart-btn"
-                >
-                  Checkout with M-Pesa
-                </button>
+                <div className="flex gap-2 flex-wrap items-center">
+                  <Link href="/configure" className="btn btn-outline btn-sm">
+                    + Add Design
+                  </Link>
+                  <button
+                    onClick={() => router.push('/checkout')}
+                    className="btn btn-primary btn-sm"
+                    id="checkout-cart-btn"
+                  >
+                    Checkout with M-Pesa
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -72,11 +72,19 @@
   padding: 0;
 }
 
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+  position: relative;
+}
+
 html {
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   scroll-behavior: smooth;
+  touch-action: manipulation;
 }
 
 body {
@@ -86,6 +94,7 @@ body {
   line-height: 1.6;
   min-height: 100dvh;
 }
+
 
 img, video {
   max-width: 100%;
@@ -192,15 +201,29 @@ h4 { font-size: 1.125rem; }
    ───────────────────────────────────────────────────────────────────────────── */
 .container {
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
-  padding: 0 var(--space-5);
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
 }
 
 .container-narrow {
   max-width: 720px;
+  width: 100%;
   margin: 0 auto;
-  padding: 0 var(--space-5);
+  padding: 0 var(--space-4);
+  box-sizing: border-box;
 }
+
+@media (min-width: 768px) {
+  .container {
+    padding: 0 var(--space-5);
+  }
+  .container-narrow {
+    padding: 0 var(--space-5);
+  }
+}
+
 
 .section {
   padding: var(--space-8) 0;
@@ -305,6 +328,10 @@ h4 { font-size: 1.125rem; }
   margin-bottom: var(--space-2);
 }
 
+input, select, textarea, .form-input {
+  font-size: 16px !important; /* Prevents auto-zoom on mobile browsers */
+}
+
 .form-input {
   width: 100%;
   background: var(--bg-2);
@@ -312,11 +339,11 @@ h4 { font-size: 1.125rem; }
   border-radius: var(--radius-md);
   color: var(--text-0);
   font-family: var(--font-sans);
-  font-size: 1rem;
   padding: var(--space-3) var(--space-4);
   transition: border-color var(--dur-fast);
   outline: none;
 }
+
 
 .form-input:focus {
   border-color: var(--accent);
@@ -475,22 +502,26 @@ h4 { font-size: 1.125rem; }
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid rgba(255,255,255,0.05);
+  width: 100%;
+  max-width: 100vw;
 }
 
 .site-header__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-5);
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
   max-width: 1280px;
+  width: 100%;
   margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .site-nav {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .site-nav a {
@@ -515,14 +546,14 @@ h4 { font-size: 1.125rem; }
 /* Responsive nav label variants */
 .nav-label--short { display: none; }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   .site-header__inner {
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
   }
 
   .site-nav {
-    gap: var(--space-2);
+    gap: var(--space-1);
   }
 
   .site-nav a {
@@ -531,8 +562,9 @@ h4 { font-size: 1.125rem; }
   }
 
   .nav-label--long  { display: none; }
-  .nav-label--short { display: inline; font-size: 1rem; }
+  .nav-label--short { display: inline; font-size: 1.1rem; }
 }
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    CONFIGURATOR LAYOUT
