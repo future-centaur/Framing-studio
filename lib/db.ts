@@ -32,10 +32,19 @@ function createPrismaClient() {
             ));
 
           if (isConnectionError) {
-            console.warn(`[Prisma] Connection reset detected (${error?.code ?? 'ConnectionReset'}). Retrying query...`);
+            console.warn(`[Prisma] Connection reset detected (${error?.code ?? 'ConnectionReset'}). Re-establishing connection and retrying query...`);
             await prisma.$disconnect().catch(() => {});
             await prisma.$connect().catch(() => {});
-            return await query(args);
+
+            if (model) {
+              const modelKey = model.charAt(0).toLowerCase() + model.slice(1);
+              const target = (prisma as any)[modelKey];
+              if (target && typeof target[operation] === 'function') {
+                return await target[operation](args);
+              }
+            } else if (typeof (prisma as any)[operation] === 'function') {
+              return await (prisma as any)[operation](args);
+            }
           }
           throw error;
         }
