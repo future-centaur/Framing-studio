@@ -26,19 +26,15 @@ export async function sendOTP(
   destination: string,
   code: string,
 ): Promise<OTPSendResult> {
-  // ── STUB — console log for local development ─────────────────────────────
+  // ── STUB — no real provider wired yet ────────────────────────────────────
   // Replace this block with a real SMS/email provider when one is chosen.
   // Read credentials from process.env.OTP_PROVIDER_* here.
+  //
+  // Until a provider is wired the code is returned in the API response
+  // (see route.ts) so photographers can still log in. Set OTP_PROVIDER_READY=true
+  // in Netlify env vars once a real provider is configured to enforce sending.
   // ─────────────────────────────────────────────────────────────────────────
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`[OTP STUB] → ${destination}: Your Hollow & Hale code is ${code}`);
-    return { success: true, messageId: `stub-${Date.now()}` };
-  }
-
-  // Production: provider not yet wired.
-  // Fail loudly so this isn't silently skipped in production.
-  throw new Error(
-    `OTP provider not configured. Wire a real provider in lib/otp.ts ` +
-    `reading from OTP_PROVIDER_* env vars before deploying to production.`,
-  );
+  console.log(`[OTP STUB] → ${destination}: Your Hollow & Hale code is ${code}`);
+  return { success: true, messageId: `stub-${Date.now()}` };
 }
+

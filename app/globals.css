@@ -648,13 +648,17 @@ h4 { font-size: 1.125rem; }
 /* Upload area */
 .upload-area {
   border: 2px dashed rgba(200,169,110,0.3);
-  border-radius: var(--radius-lg);
-  padding: var(--space-7);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
   text-align: center;
   cursor: pointer;
   transition:
     border-color var(--dur-mid) var(--ease-out),
     background var(--dur-mid) var(--ease-out);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
 }
 
 .upload-area:hover,
@@ -664,10 +668,11 @@ h4 { font-size: 1.125rem; }
 }
 
 .upload-area__icon {
-  font-size: 2.5rem;
-  margin-bottom: var(--space-3);
-  opacity: 0.6;
+  font-size: 1.2rem;
+  opacity: 0.7;
+  flex-shrink: 0;
 }
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DASHBOARD

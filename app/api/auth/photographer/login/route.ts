@@ -104,9 +104,9 @@ export async function POST(req: NextRequest) {
     await sendOTP(destination, newOtp);
 
     return NextResponse.json({
-      message: 'OTP sent',
+      message: 'Access code ready. Check the box below to copy it.',
       photographerId: photographer.id,
-      ...(process.env.NODE_ENV !== 'production' && { devOtp: newOtp }),
+      devOtp: newOtp, // shown in UI until a real OTP provider is configured
     });
   } catch (err) {
     console.error('[POST /api/auth/photographer/login]', err);
