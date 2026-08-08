@@ -69,18 +69,23 @@ export function PlacementCanvas({
     rotateX: placement.rotateX ?? 0,
   });
 
-  // Sync external placement into local state only when not dragging
+  const localRef = useRef<Placement>(local);
+  localRef.current = local;
+
+  // Sync external placement into local state only when placement prop values change from outside
   useEffect(() => {
     if (!isDragging) {
-      setLocal({
+      const next = {
         x: placement.x ?? 0.5,
         y: placement.y ?? 0.4,
         scale: placement.scale ?? 0.4,
         rotateY: placement.rotateY ?? 0,
         rotateX: placement.rotateX ?? 0,
-      });
+      };
+      setLocal(next);
+      localRef.current = next;
     }
-  }, [placement, isDragging]);
+  }, [placement.x, placement.y, placement.scale, placement.rotateY, placement.rotateX]);
 
   // Debounced save — fires 800ms after user stops interacting
   const debouncedSave = useDebounceCallback(onPlacementChange, 800);
@@ -108,14 +113,16 @@ export function PlacementCanvas({
     const dy = e.clientY - dragStartRef.current.mouseY;
     const newX = Math.max(0.05, Math.min(0.95, dragStartRef.current.px + dx / width));
     const newY = Math.max(0.05, Math.min(0.95, dragStartRef.current.py + dy / height));
-    setLocal((prev) => ({ ...prev, x: newX, y: newY }));
+    const next = { ...localRef.current, x: newX, y: newY };
+    localRef.current = next;
+    setLocal(next);
   };
 
   const handlePointerUp = () => {
     if (!isDragging) return;
     setIsDragging(false);
     dragStartRef.current = null;
-    debouncedSave(local);
+    debouncedSave(localRef.current);
   };
 
   // ── Scroll to scale ────────────────────────────────────────────────────────
