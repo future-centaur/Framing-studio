@@ -453,58 +453,59 @@ function ConfiguratorContent() {
         <div className="configurator-layout">
           {/* Left Visual Preview Sticky Panel */}
           <div className="preview-panel flex flex-col gap-4">
-            <LivePreview
-              previewImageUrl={previewUrl}
-              loading={previewLoading || actionLoading}
-              error={error}
+            {/* Hidden file input — always in DOM */}
+            <input
+              type="file"
+              id="photo-file"
+              accept="image/png, image/jpeg, image/jpg"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
             />
 
-            {/* Upload Selector */}
-            <div className="card rabbet">
-              <input
-                type="file"
-                id="photo-file"
-                accept="image/png, image/jpeg, image/jpg"
-                style={{ display: 'none' }}
-                onChange={handleFileUpload}
+            {/* Preview box with Replace pill overlaid */}
+            <div style={{ position: 'relative' }}>
+              <LivePreview
+                previewImageUrl={previewUrl}
+                loading={previewLoading || actionLoading}
+                error={error}
               />
-              {uploadedPhotoUrl ? (
-                <div className="upload-replace-row">
-                  <span className="text-xs text-muted">📷 Photo uploaded</span>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm upload-replace-btn"
-                    onClick={() => document.getElementById('photo-file')?.click()}
-                    disabled={actionLoading}
-                  >
-                    ↺ Replace
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <label htmlFor="photo-file" className="form-label text-center">
-                    Upload Your Image
-                  </label>
-                  <div
-                    className="upload-area"
-                    onClick={() => document.getElementById('photo-file')?.click()}
-                  >
-                    <span className="upload-area__icon">☁️</span>
-                    <span className="text-sm">Select JPG/PNG (Max 20MB)</span>
-                  </div>
-                </>
-              )}
-
-              {resolutionCheck?.warning && (
-                <div className="warning-banner mt-4">
-                  <span style={{ fontSize: '1.2rem' }}>⚠️</span>
-                  <div className="text-xs text-secondary">
-                    {resolutionCheck.message}
-                  </div>
-                </div>
+              {uploadedPhotoUrl && (
+                <button
+                  type="button"
+                  className="upload-replace-pill"
+                  onClick={() => document.getElementById('photo-file')?.click()}
+                  disabled={actionLoading}
+                  title="Replace photo"
+                >
+                  ↺ Replace photo
+                </button>
               )}
             </div>
 
+            {/* Upload area — only shown before first upload */}
+            {!uploadedPhotoUrl && (
+              <div className="card rabbet">
+                <label htmlFor="photo-file" className="form-label text-center">
+                  Upload Your Image
+                </label>
+                <div
+                  className="upload-area"
+                  onClick={() => document.getElementById('photo-file')?.click()}
+                >
+                  <span className="upload-area__icon">☁️</span>
+                  <span className="text-sm">Select JPG/PNG (Max 20MB)</span>
+                </div>
+              </div>
+            )}
+
+            {resolutionCheck?.warning && (
+              <div className="warning-banner">
+                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                <div className="text-xs text-secondary">
+                  {resolutionCheck.message}
+                </div>
+              </div>
+            )}
 
             {/* Design Link Share Option (D-5) */}
             {uploadedPhotoUrl && (
