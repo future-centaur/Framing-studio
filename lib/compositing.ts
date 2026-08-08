@@ -8,6 +8,7 @@
  */
 
 import sharp from 'sharp';
+import { getPhotoBlob } from '@/lib/blobs';
 
 // Minimum pixel dimensions per glazing tier for a standard 20×30cm print
 // These thresholds enforce D-4 (low-res warning)
@@ -87,6 +88,16 @@ export async function compositePreview(input: CompositeInput): Promise<Composite
     if (fileUrl.startsWith('data:')) {
       const base64Part = fileUrl.split(',')[1] || '';
       imageBuffer = Buffer.from(base64Part, 'base64');
+    } else if (fileUrl.includes('/api/blobs/')) {
+      const blobKey = fileUrl.split('/api/blobs/')[1];
+      const photo = blobKey ? await getPhotoBlob(blobKey) : null;
+      if (photo?.buffer) {
+        imageBuffer = photo.buffer;
+      } else {
+        const response = await fetch(fileUrl);
+        if (!response.ok) throw new Error(`Failed to fetch image (${response.status}): ${response.statusText}`);
+        imageBuffer = Buffer.from(await response.arrayBuffer());
+      }
     } else {
       const response = await fetch(fileUrl);
       if (!response.ok) throw new Error(`Failed to fetch image (${response.status}): ${response.statusText}`);

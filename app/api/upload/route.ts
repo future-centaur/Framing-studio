@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { checkResolution } from '@/lib/compositing';
+import { savePhotoBlob } from '@/lib/blobs';
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -41,28 +42,17 @@ export async function POST(req: NextRequest) {
     // D-4: Check resolution immediately on upload
     const resCheck = await checkResolution(buffer);
 
-    // Upload to Netlify Blobs
-    const { getStore } = await import('@netlify/blobs');
+    // Store in Netlify Blobs (or fallback memory store)
     const filename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    
-    let fileUrl: string;
-    
-    if (process.env.BLOB_STORAGE_TOKEN && process.env.NETLIFY_SITE_ID) {
-      // Real Netlify Blob storage
-      const store = getStore({
-        name: 'photos',
-        token: process.env.BLOB_STORAGE_TOKEN,
-        siteID: process.env.NETLIFY_SITE_ID,
-      });
-      await store.set(filename, new Blob([buffer]));
-      
-      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-      fileUrl = `${siteUrl}/api/blobs/${filename}`;
-    } else {
-      // Dev mode: store as base64 data URL (not for production)
-      console.warn('[upload] BLOB_STORAGE_TOKEN not set — using base64 fallback for dev');
-      fileUrl = `data:${file.type};base64,${buffer.toString('base64')}`;
-    }
+    await savePhotoBlob(filename, buffer, file.type);
+
+    // Resolve site origin dynamically so production never defaults to localhost
+    const forwardedHost = req.headers.get('x-forwarded-host');
+    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+    const origin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : req.nextUrl.origin;
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+
+    const fileUrl = `${siteUrl}/api/blobs/${filename}`;
 
     return NextResponse.json({
       fileUrl,

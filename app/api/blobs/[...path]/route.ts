@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getStore } from '@netlify/blobs';
+import { getPhotoBlob } from '@/lib/blobs';
 
 export async function GET(
   _req: NextRequest,
@@ -15,27 +15,14 @@ export async function GET(
     const { path } = await params;
     const key = path.join('/');
 
-    if (!process.env.BLOB_STORAGE_TOKEN || !process.env.NETLIFY_SITE_ID) {
-      return NextResponse.json(
-        { error: 'Blob storage is not configured' },
-        { status: 501 },
-      );
-    }
-
-    const store = getStore({
-      name: 'photos',
-      token: process.env.BLOB_STORAGE_TOKEN,
-      siteID: process.env.NETLIFY_SITE_ID,
-    });
-
-    const data = await store.get(key, { type: 'arrayBuffer' });
-    if (!data) {
+    const photo = await getPhotoBlob(key);
+    if (!photo) {
       return NextResponse.json({ error: 'Image not found' }, { status: 404 });
     }
 
-    return new NextResponse(data, {
+    return new NextResponse(new Uint8Array(photo.buffer), {
       headers: {
-        'Content-Type': 'image/jpeg',
+        'Content-Type': photo.contentType || 'image/jpeg',
         'Cache-Control': 'public, max-age=31536000, immutable',
       },
     });

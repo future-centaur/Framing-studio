@@ -209,6 +209,43 @@ function ConfiguratorContent() {
     }));
   };
 
+  // Client-side image optimization helper to avoid Netlify 6MB body limits
+  const compressImageClientSide = (file: File, maxDimension = 2400, quality = 0.88): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        let { width, height } = img;
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return resolve(file);
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => resolve(blob || file),
+          file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+          quality,
+        );
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve(file);
+      };
+      img.src = url;
+    });
+  };
+
   // Upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -218,8 +255,17 @@ function ConfiguratorContent() {
     setActionLoading(true);
     setError(null);
 
+    let uploadPayload: Blob = file;
+    if (file.size > 2.5 * 1024 * 1024) {
+      try {
+        uploadPayload = await compressImageClientSide(file);
+      } catch (err) {
+        console.warn('Client-side compression warning:', err);
+      }
+    }
+
     const formData = new FormData();
-    formData.append('photo', file);
+    formData.append('photo', uploadPayload, file.name);
 
     try {
       const res = await fetch('/api/upload', {
