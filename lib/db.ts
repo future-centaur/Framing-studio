@@ -4,12 +4,47 @@ import { PrismaClient } from '@prisma/client';
 // in Next.js hot-reload dev environment
 declare global {
   // eslint-disable-next-line no-var
-  var __prisma: PrismaClient | undefined;
+  var __prisma: any;
 }
 
-const db = globalThis.__prisma ?? new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
+function createPrismaClient() {
+  const prisma = new PrismaClient({
+    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  });
+
+  return prisma.$extends({
+    query: {
+      $allOperations: async ({ operation, model, args, query }) => {
+        try {
+          return await query(args);
+        } catch (error: any) {
+          // Detect connection reset / closed server errors (Neon auto-suspend P1017, P1001, etc.)
+          const isConnectionError =
+            error?.code === 'P1017' ||
+            error?.code === 'P1001' ||
+            error?.code === 'P1002' ||
+            error?.code === 'P1008' ||
+            (typeof error?.message === 'string' && (
+              error.message.includes('Server has closed the connection') ||
+              error.message.includes('ConnectionReset') ||
+              error.message.includes('10054') ||
+              error.message.includes('forcibly closed')
+            ));
+
+          if (isConnectionError) {
+            console.warn(`[Prisma] Connection reset detected (${error?.code ?? 'ConnectionReset'}). Retrying query...`);
+            await prisma.$disconnect().catch(() => {});
+            await prisma.$connect().catch(() => {});
+            return await query(args);
+          }
+          throw error;
+        }
+      },
+    },
+  });
+}
+
+const db = (globalThis.__prisma ?? createPrismaClient()) as ReturnType<typeof createPrismaClient>;
 
 if (process.env.NODE_ENV !== 'production') {
   globalThis.__prisma = db;
