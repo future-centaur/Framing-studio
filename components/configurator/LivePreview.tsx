@@ -17,6 +17,7 @@ export function LivePreview({ previewImageUrl, loading, error }: LivePreviewProp
     <div
       className="preview-panel rabbet flex flex-col items-center justify-center"
       style={{
+        width: '100%',
         aspectRatio: '4/3',
         background: '#141311',
         borderRadius: 'var(--radius-lg)',
