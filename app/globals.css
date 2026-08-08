@@ -499,9 +499,40 @@ h4 { font-size: 1.125rem; }
   transition: color var(--dur-fast);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
+  white-space: nowrap;
 }
 
 .site-nav a:hover { color: var(--text-0); background: var(--bg-2); }
+
+/* Pill style for photographer link */
+.nav-pill {
+  border: 1px solid rgba(200, 169, 110, 0.25);
+}
+.nav-pill:hover {
+  border-color: rgba(200, 169, 110, 0.5) !important;
+}
+
+/* Responsive nav label variants */
+.nav-label--short { display: none; }
+
+@media (max-width: 600px) {
+  .site-header__inner {
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .site-nav {
+    gap: var(--space-2);
+  }
+
+  .site-nav a {
+    padding: var(--space-2);
+    font-size: 0.8rem;
+  }
+
+  .nav-label--long  { display: none; }
+  .nav-label--short { display: inline; font-size: 1rem; }
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    CONFIGURATOR LAYOUT
@@ -673,7 +704,27 @@ h4 { font-size: 1.125rem; }
   flex-shrink: 0;
 }
 
+/* Compact replace row shown after image is uploaded */
+.upload-replace-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
 
+.upload-replace-btn {
+  color: var(--text-2);
+  font-size: 0.78rem;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-full);
+  transition: color var(--dur-fast), border-color var(--dur-fast);
+}
+.upload-replace-btn:hover {
+  color: var(--accent-light);
+  border-color: rgba(200,169,110,0.4);
+  background: rgba(200,169,110,0.05);
+}
 /* ─────────────────────────────────────────────────────────────────────────────
    DASHBOARD
    ───────────────────────────────────────────────────────────────────────────── */

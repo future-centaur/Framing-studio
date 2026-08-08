@@ -118,11 +118,20 @@ export function StudioHeader() {
           <StudioLogo />
         </Link>
         <nav className="site-nav" aria-label="Main navigation">
-          <a href="/configure" id="nav-configure">Configure</a>
-          <a href="/configure" id="nav-visualize">Visualize in a Room</a>
-          <a href="/photographer/login" id="nav-photographer">Photographer Login</a>
+          <a href="/configure" id="nav-configure">
+            <span className="nav-label">Configure</span>
+          </a>
+          <a href="/configure" id="nav-visualize">
+            <span className="nav-label nav-label--long">Visualize in a Room</span>
+            <span className="nav-label nav-label--short" aria-hidden="true">🖼</span>
+          </a>
+          <a href="/photographer/login" id="nav-photographer" className="nav-pill">
+            <span className="nav-label nav-label--long">Photographer Login</span>
+            <span className="nav-label nav-label--short" aria-hidden="true">👤</span>
+          </a>
         </nav>
       </div>
     </header>
   );
 }
+

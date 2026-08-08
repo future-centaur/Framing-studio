@@ -461,25 +461,39 @@ function ConfiguratorContent() {
 
             {/* Upload Selector */}
             <div className="card rabbet">
-              <label htmlFor="photo-file" className="form-label text-center">
-                Upload Your Image
-              </label>
-              <div
-                className="upload-area flex flex-col items-center justify-center"
-                onClick={() => document.getElementById('photo-file')?.click()}
-              >
-                <span className="upload-area__icon">☁️</span>
-                <span className="text-sm">
-                  {uploadedPhotoUrl ? 'Replace Photo' : 'Select JPG/PNG (Max 20MB)'}
-                </span>
-                <input
-                  type="file"
-                  id="photo-file"
-                  accept="image/png, image/jpeg, image/jpg"
-                  style={{ display: 'none' }}
-                  onChange={handleFileUpload}
-                />
-              </div>
+              <input
+                type="file"
+                id="photo-file"
+                accept="image/png, image/jpeg, image/jpg"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              {uploadedPhotoUrl ? (
+                <div className="upload-replace-row">
+                  <span className="text-xs text-muted">📷 Photo uploaded</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm upload-replace-btn"
+                    onClick={() => document.getElementById('photo-file')?.click()}
+                    disabled={actionLoading}
+                  >
+                    ↺ Replace
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <label htmlFor="photo-file" className="form-label text-center">
+                    Upload Your Image
+                  </label>
+                  <div
+                    className="upload-area"
+                    onClick={() => document.getElementById('photo-file')?.click()}
+                  >
+                    <span className="upload-area__icon">☁️</span>
+                    <span className="text-sm">Select JPG/PNG (Max 20MB)</span>
+                  </div>
+                </>
+              )}
 
               {resolutionCheck?.warning && (
                 <div className="warning-banner mt-4">
@@ -490,6 +504,7 @@ function ConfiguratorContent() {
                 </div>
               )}
             </div>
+
 
             {/* Design Link Share Option (D-5) */}
             {uploadedPhotoUrl && (
