@@ -265,7 +265,8 @@ h4 { font-size: 1.125rem; }
     transform var(--dur-fast) var(--ease-out),
     box-shadow var(--dur-fast) var(--ease-out),
     opacity var(--dur-fast);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .btn:active { transform: scale(0.97); }
@@ -576,6 +577,7 @@ input, select, textarea, .form-input {
   align-items: start;
   padding: var(--space-6) 0;
   min-height: calc(100dvh - 80px);
+  min-width: 0;
 }
 
 /* Sticky preview on all displays (desktop left column, mobile top) */
@@ -583,6 +585,7 @@ input, select, textarea, .form-input {
   position: sticky;
   top: 60px; /* or var(--space-6) but 60px accounts for header */
   z-index: 90;
+  min-width: 0;
 }
 
 @media (max-width: 1024px) {
@@ -631,6 +634,7 @@ input, select, textarea, .form-input {
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
+  min-width: 0;
 }
 
 /* Catalog selection grid — grid on desktop, horizontal scroll carousel on mobile */
